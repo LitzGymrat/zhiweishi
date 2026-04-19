@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/chroma_db/
+data/case_output/
+data/documents/uploaded/
