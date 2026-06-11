@@ -334,3 +334,26 @@ def save_case_writeback(payload: dict[str, Any]) -> dict[str, Path]:
         "audit_json_path": audit_json_path,
         "knowledge_doc_path": knowledge_doc_path,
     }
+
+
+def reset_demo_writebacks() -> dict[str, int]:
+    deleted_knowledge_docs = 0
+    deleted_audit_files = 0
+
+    case_cards_dir = DOCUMENTS_DIR / "case_cards"
+    if case_cards_dir.exists():
+        for file_path in case_cards_dir.rglob("case_*.md"):
+            if not AUTO_WRITEBACK_FILE_PATTERN.match(file_path.name):
+                continue
+            file_path.unlink()
+            deleted_knowledge_docs += 1
+
+    if CASE_OUTPUT_DIR.exists():
+        for file_path in CASE_OUTPUT_DIR.rglob("case_*.json"):
+            file_path.unlink()
+            deleted_audit_files += 1
+
+    return {
+        "deleted_knowledge_docs": deleted_knowledge_docs,
+        "deleted_audit_files": deleted_audit_files,
+    }

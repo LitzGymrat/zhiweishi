@@ -8,6 +8,7 @@ Push-Location $scriptDir
 
 try {
     $env:app_mode = "full"
+    $env:demo_reset_enabled = "true"
     $venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
     $localUrl = "http://localhost:$Port"
 

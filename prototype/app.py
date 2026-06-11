@@ -15,6 +15,7 @@ from src.corpus_manager import (
     build_corpus_summary,
     collect_corpus_documents,
     prepare_case_writeback_payload,
+    reset_demo_writebacks,
     resolve_document_dir,
     save_case_writeback,
 )
@@ -201,6 +202,29 @@ if config.is_poc1_readonly:
     st.sidebar.info("只保留 PoC1 相关的故障排查体验页面，已隐藏案例回写和数据导入，也不会自动建库写盘。")
 else:
     st.sidebar.info("聚焦老旧设备维保场景，展示排障、培训和案例沉淀的基本闭环。")
+    if config.demo_reset_enabled:
+        with st.sidebar.expander("🎬 演示拍摄控制", expanded=True):
+            st.caption("拍摄前点击一次，可恢复到“回写前”的干净状态。")
+            if st.session_state.get("demo_reset_message"):
+                st.success(st.session_state.pop("demo_reset_message"))
+            if st.button("重置回写数据并重建知识库", type="primary", use_container_width=True):
+                with st.spinner("正在清理演示回写并重建知识库..."):
+                    reset_result = reset_demo_writebacks()
+                    ingest_result = pipeline.rebuild_default_corpus(DOCUMENTS_DIR)
+                for key in (
+                    "last_fault_result",
+                    "last_training_result",
+                    "last_training_signature",
+                    "last_case_review",
+                ):
+                    st.session_state.pop(key, None)
+                st.session_state["demo_reset_message"] = (
+                    "已恢复演示状态："
+                    f"删除 {reset_result['deleted_knowledge_docs']} 份回写案例、"
+                    f"{reset_result['deleted_audit_files']} 份审计记录；"
+                    f"当前知识库 {ingest_result.document_count} 份文档、{ingest_result.chunk_count} 个文本块。"
+                )
+                st.rerun()
 
 with st.sidebar.expander("⚙️ 系统状态与配置", expanded=False):
     st.metric("知识库文档数", corpus_summary["total_documents"])

@@ -137,11 +137,11 @@ class RagPipeline:
             self._refresh_sparse_index()
 
     def _recreate_collection(self) -> None:
-        try:
-            self.chroma_client.delete_collection(name="zhiweishi_chunks")
-        except Exception:
-            pass
         self.collection = self.chroma_client.get_or_create_collection(name="zhiweishi_chunks")
+        existing = self.collection.get()
+        ids = existing.get("ids", [])
+        if ids:
+            self.collection.delete(ids=ids)
 
     def _refresh_sparse_index(self, chunk_records: list[dict[str, Any]] | None = None) -> None:
         if chunk_records is None:

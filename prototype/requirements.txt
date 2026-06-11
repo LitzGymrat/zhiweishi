@@ -3,5 +3,7 @@ openpyxl>=3.1
 pypdf>=5.0
 docx2txt>=0.8
 chromadb==0.4.24
+numpy<2
 openai>=1.52
+pydantic-settings>=2.6
 tiktoken>=0.8

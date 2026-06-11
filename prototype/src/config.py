@@ -32,6 +32,10 @@ def _normalize_app_mode(raw_value: str) -> str:
     return "full"
 
 
+def _parse_bool(raw_value: str) -> bool:
+    return str(raw_value or "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
 class AppConfig(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
@@ -108,6 +112,10 @@ class AppConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("access_password", "ACCESS_PASSWORD", "ZHIWEISHI_ACCESS_PASSWORD"),
     )
+    demo_reset_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("demo_reset_enabled", "DEMO_RESET_ENABLED", "ZHIWEISHI_DEMO_RESET_ENABLED"),
+    )
 
     @field_validator("embedding_provider", mode="before")
     @classmethod
@@ -118,6 +126,13 @@ class AppConfig(BaseSettings):
     @classmethod
     def normalize_app_mode(cls, value: str) -> str:
         return _normalize_app_mode(str(value or "full"))
+
+    @field_validator("demo_reset_enabled", mode="before")
+    @classmethod
+    def normalize_demo_reset_enabled(cls, value: str | bool) -> bool:
+        if isinstance(value, bool):
+            return value
+        return _parse_bool(str(value or ""))
 
     @classmethod
     def from_env(cls) -> "AppConfig":
@@ -172,6 +187,7 @@ def get_env_help_text() -> str:
             "top_k=6",
             "app_mode=full 或 poc1_readonly",
             "access_password=可选；对外共享时建议设置访问口令",
+            "demo_reset_enabled=true 时显示演示重置按钮",
             "兼容旧变量：DEEPSEEK_API_KEY / DASHSCOPE_API_KEY / ZHIWEISHI_*",
         ]
     )
