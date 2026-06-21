@@ -70,14 +70,14 @@ uv venv --python 3.12 "$DATA_ROOT/env-embed"
 
 ```bash
 cd "$DATA_ROOT"
-git clone <仓库地址> repo
+git clone --branch codex/video-demo --single-branch \
+  https://github.com/LitzGymrat/zhiweishi.git repo
 cd "$DATA_ROOT/repo"
-git switch codex/video-demo
 git status --short
 git log -1 --oneline
 ```
 
-`git status --short` 应为空。若服务器需要某项尚未推送的改动，先在本机做范围明确的 commit 和 push；不要在服务器上手工补抄本机改动。
+`git status --short` 应为空；首次拉取的提交应至少为 `960a2b5 Prepare 4090 deployment and case provenance`。若服务器需要某项尚未推送的改动，先在本机做范围明确的 commit 和 push；不要在服务器上手工补抄本机改动。
 
 ## 4. 现有 Streamlit 原型
 

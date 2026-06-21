@@ -12,7 +12,7 @@
 
 ## 当前技术链路
 
-当前 Git 分支为 `codex/video-demo`，最近已提交版本为 `9511179 Add video demo reset workflow`。
+当前 Git 分支为 `codex/video-demo`，服务器初始化基准提交为 `960a2b5 Prepare 4090 deployment and case provenance`。
 
 当前应用仍使用外部服务：
 
