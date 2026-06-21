@@ -11,6 +11,7 @@ from src.config import AppConfig
 
 FAULT_SCHEMA_EXAMPLE = {
     "summary": "一句话结论",
+    "matched_writeback_case_note": "命中回写案例时，引用案例编号、处理人和回写时间；未命中则为空字符串",
     "evidence_observations": ["证据观察1", "证据观察2"],
     "possible_causes": ["原因1", "原因2"],
     "troubleshooting_steps": ["步骤1", "步骤2"],
@@ -63,6 +64,7 @@ TASK_PROMPTS: dict[str, PromptTaskSpec] = {
         style_rules=(
             "用现场维保口吻，短句、直接、可执行。",
             "先给结论，再给依据，不写空泛分析。",
+            "命中人工确认的回写案例时，必须在回写案例说明中引用案例编号、处理人和回写时间；未命中时保持为空。",
             "避免宣传语、聊天语气和无依据推测。",
         ),
         output_schema=FAULT_SCHEMA_EXAMPLE,
@@ -167,6 +169,13 @@ class DeepSeekFaultReasoner:
             f"{index}. {step}" for index, step in enumerate(spec.reasoning_framework, start=1)
         )
         style_text = "\n".join(f"- {rule}" for rule in spec.style_rules)
+        writeback_case_rule = ""
+        if task_name == "fault_diagnosis":
+            writeback_case_rule = (
+                "6. 若检索片段包含“来源：前台案例回写（人工确认后归档）”，"
+                "必须在 matched_writeback_case_note 中准确引用片段已有的案例编号、处理人和回写时间；"
+                "没有命中回写案例时该字段返回空字符串，不得编造。\n"
+            )
         return (
             "你是工业设备维保场景的知识增强助手。"
             "你必须先做基于证据的半形式化推理，再输出结构化结果。\n"
@@ -175,7 +184,8 @@ class DeepSeekFaultReasoner:
             "2. 先抽取证据，再形成判断，再给出动作建议，不得跳步。\n"
             "3. 对证据不足部分必须写入不确定性说明，不得脑补。\n"
             "4. 禁止输出 markdown、代码块、解释文本或 schema 之外的字段。\n"
-            "5. 输出必须是严格 JSON，字段名和层级必须与要求完全一致。\n\n"
+            "5. 输出必须是严格 JSON，字段名和层级必须与要求完全一致。\n"
+            f"{writeback_case_rule}\n"
             f"任务场景：{spec.label}\n"
             f"半形式化推理框架：\n{framework_text}\n\n"
             f"回复风格要求：\n{style_text}"
@@ -187,6 +197,7 @@ class DeepSeekFaultReasoner:
                 result.get("summary"),
                 "当前证据不足，建议先核对基础状态和关键连接，再继续排查。",
             ),
+            "matched_writeback_case_note": _normalize_text(result.get("matched_writeback_case_note"), ""),
             "evidence_observations": _normalize_list(
                 result.get("evidence_observations"),
                 ["检索片段已返回与当前故障相关的维保依据。"],

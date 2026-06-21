@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any
 from uuid import uuid4
 
@@ -95,6 +96,46 @@ def _extract_lines_by_keywords(retrieved_chunks: list[dict], keywords: list[str]
 
 def _build_fault_query(device_name: str, symptom: str) -> str:
     return f"设备：{device_name}\n故障现象：{symptom}"
+
+
+def _extract_writeback_case_references(retrieved_chunks: list[dict]) -> list[dict[str, str]]:
+    references: list[dict[str, str]] = []
+    seen_sources: set[str] = set()
+    for chunk in retrieved_chunks:
+        content = str(chunk.get("content", ""))
+        source_label = str(chunk.get("source_label", ""))
+        if "来源：前台案例回写（人工确认后归档）" not in content:
+            continue
+        if source_label in seen_sources:
+            continue
+
+        def read_field(label: str) -> str:
+            match = re.search(rf"^{re.escape(label)}：\s*(.+?)\s*$", content, flags=re.MULTILINE)
+            return match.group(1).strip() if match else ""
+
+        case_id = read_field("案例编号")
+        operator = read_field("处理人")
+        written_at = read_field("回写时间")
+        if not case_id:
+            timestamp_match = re.search(r"case_(\d{8})_(\d{6})", source_label)
+            if timestamp_match:
+                date_part, time_part = timestamp_match.groups()
+                case_id = f"AUTO-{date_part[:4]}{date_part[4:6]}{date_part[6:]}-{time_part}"
+                written_at = written_at or (
+                    f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:]} "
+                    f"{time_part[:2]}:{time_part[2:4]}:{time_part[4:]}"
+                )
+
+        references.append(
+            {
+                "case_id": case_id or source_label,
+                "operator": operator or "未填写",
+                "written_at": written_at or "未记录",
+                "source_label": source_label or "回写案例",
+            }
+        )
+        seen_sources.add(source_label)
+    return references[:3]
 
 
 def _normalize_device_name(device_name: str) -> str:
@@ -416,6 +457,7 @@ class RagPipeline:
 
     def answer_fault_question(self, device_name: str, symptom: str, top_k: int | None = None) -> dict:
         retrieved_chunks = self._resolve_retrieved_chunks(device_name, symptom, top_k=top_k)
+        writeback_case_references = _extract_writeback_case_references(retrieved_chunks)
         if self.reasoner and retrieved_chunks:
             try:
                 result = self.reasoner.build_fault_card(device_name, symptom, retrieved_chunks)
@@ -426,10 +468,13 @@ class RagPipeline:
                     limit=6,
                 )
                 result["retrieved_chunks"] = retrieved_chunks
+                result["writeback_case_references"] = writeback_case_references
                 return result
             except Exception:
                 pass
-        return self._build_fallback_result(device_name, symptom, retrieved_chunks)
+        result = self._build_fallback_result(device_name, symptom, retrieved_chunks)
+        result["writeback_case_references"] = writeback_case_references
+        return result
 
     def _build_training_fallback(self, fault_result: dict, retrieved_chunks: list[dict]) -> dict:
         device_name = str(fault_result.get("device", "当前设备"))

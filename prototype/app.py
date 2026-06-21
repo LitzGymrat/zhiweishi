@@ -40,6 +40,21 @@ def render_fault_result(result: dict) -> None:
     st.subheader("📋 诊断摘要", divider="blue")
     st.info(result.get("summary", "当前暂无结构化摘要。"))
 
+    writeback_case_references = result.get("writeback_case_references", [])
+    if writeback_case_references:
+        with st.container(border=True):
+            st.markdown("#### 📝 已命中回写案例")
+            for reference in writeback_case_references:
+                case_id_col, operator_col, written_at_col = st.columns(3)
+                case_id_col.metric("案例编号", reference.get("case_id", "未记录"))
+                operator_col.metric("处理人", reference.get("operator", "未填写"))
+                written_at_col.metric("回写时间", reference.get("written_at", "未记录"))
+                st.caption(f"来源：{reference.get('source_label', '回写案例')} | 人工确认后归档")
+
+            case_note = str(result.get("matched_writeback_case_note", "")).strip()
+            if case_note:
+                st.success(case_note)
+
     col1, col2 = st.columns(2)
     with col1:
         with st.container(border=True):
