@@ -52,6 +52,54 @@ class AppConfig(BaseSettings):
         default="https://api.deepseek.com",
         validation_alias=AliasChoices("deepseek_base_url", "DEEPSEEK_BASE_URL"),
     )
+    dmx_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("dmx_api_key", "DMX_API_KEY"),
+    )
+    dmx_base_url: str = Field(
+        default="https://www.dmxapi.cn/v1",
+        validation_alias=AliasChoices("dmx_base_url", "DMX_BASE_URL"),
+    )
+    dmx_model: str = Field(
+        default="gemini-3-flash-preview",
+        validation_alias=AliasChoices("dmx_model", "DMX_MODEL"),
+    )
+    eval_base_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_base_api_key", "EVAL_BASE_API_KEY"),
+    )
+    eval_base_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_base_base_url", "EVAL_BASE_BASE_URL"),
+    )
+    eval_base_model: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_base_model", "EVAL_BASE_MODEL"),
+    )
+    eval_finetuned_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_finetuned_api_key", "EVAL_FINETUNED_API_KEY"),
+    )
+    eval_finetuned_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_finetuned_base_url", "EVAL_FINETUNED_BASE_URL"),
+    )
+    eval_finetuned_model: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_finetuned_model", "EVAL_FINETUNED_MODEL"),
+    )
+    eval_deepseek_v4_flash_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_deepseek_v4_flash_api_key", "EVAL_DEEPSEEK_V4_FLASH_API_KEY"),
+    )
+    eval_deepseek_v4_flash_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("eval_deepseek_v4_flash_base_url", "EVAL_DEEPSEEK_V4_FLASH_BASE_URL"),
+    )
+    eval_deepseek_v4_flash_model: str = Field(
+        default="deepseek-v4-flash",
+        validation_alias=AliasChoices("eval_deepseek_v4_flash_model", "EVAL_DEEPSEEK_V4_FLASH_MODEL"),
+    )
     model_name: str = Field(
         default="deepseek-chat",
         validation_alias=AliasChoices("model_name", "DEEPSEEK_MODEL"),
@@ -175,6 +223,18 @@ def get_env_help_text() -> str:
             "deepseek_api_key=你的DeepSeek API Key",
             "deepseek_base_url=https://api.deepseek.com",
             "model_name=deepseek-chat",
+            "dmx_api_key=你的DMXAPI Key（仅用于 SFT 教师模型）",
+            "dmx_base_url=https://www.dmxapi.cn/v1",
+            "dmx_model=gemini-3-flash-preview",
+            "eval_base_base_url=http://127.0.0.1:8000/v1（未部署时留空）",
+            "eval_base_model=基础模型服务的模型 ID",
+            "eval_base_api_key=本地兼容接口可填 EMPTY",
+            "eval_finetuned_base_url=http://127.0.0.1:8001/v1（未部署时留空）",
+            "eval_finetuned_model=微调模型服务的模型 ID",
+            "eval_finetuned_api_key=本地兼容接口可填 EMPTY",
+            "eval_deepseek_v4_flash_model=deepseek-v4-flash",
+            "eval_deepseek_v4_flash_api_key=留空时复用 deepseek_api_key",
+            "eval_deepseek_v4_flash_base_url=留空时复用 deepseek_base_url",
             "qwen_api_key=你的Qwen/DashScope API Key",
             "qwen_base_url=https://dashscope.aliyuncs.com/compatible-mode/v1",
             "qwen_embedding_name=text-embedding-v4",

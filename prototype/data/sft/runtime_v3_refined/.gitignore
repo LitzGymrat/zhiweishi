@@ -1,0 +1,6 @@
+# Teacher-generated datasets, retries, coverage reports, and message exports are local artifacts.
+*.jsonl
+*_coverage_report.json
+export/
+v04/
+v04_migration/

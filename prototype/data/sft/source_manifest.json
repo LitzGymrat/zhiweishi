@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "root": "prototype/data/documents",
+  "sources": [
+    {
+      "path": "manuals/液压泵站/液压泵站维护手册_整理版.md",
+      "label": "液压泵站维护手册_整理版.md",
+      "device": "液压泵站",
+      "category": "设备说明书"
+    },
+    {
+      "path": "sop/液压泵站/液压泵站点检SOP.md",
+      "label": "液压泵站点检SOP.md",
+      "device": "液压泵站",
+      "category": "SOP"
+    },
+    {
+      "path": "maintenance_logs/液压泵站/液压泵站维保班报_20260316.md",
+      "label": "液压泵站维保班报_20260316.md",
+      "device": "液压泵站",
+      "category": "维保日志"
+    },
+    {
+      "path": "repair_records/液压泵站/液压泵站维修工单_20260316.md",
+      "label": "液压泵站维修工单_20260316.md",
+      "device": "液压泵站",
+      "category": "维修记录"
+    },
+    {
+      "path": "case_cards/液压泵站/HC-002_吸油接头进气案例.md",
+      "label": "HC-002_吸油接头进气案例.md",
+      "device": "液压泵站",
+      "category": "案例卡"
+    },
+    {
+      "path": "manuals/数控主轴单元/数控主轴维护手册_整理版.md",
+      "label": "数控主轴维护手册_整理版.md",
+      "device": "数控主轴单元",
+      "category": "设备说明书"
+    },
+    {
+      "path": "sop/数控主轴单元/数控主轴开机与点检SOP.md",
+      "label": "数控主轴开机与点检SOP.md",
+      "device": "数控主轴单元",
+      "category": "SOP"
+    },
+    {
+      "path": "maintenance_logs/数控主轴单元/数控主轴维保班报_20260320.md",
+      "label": "数控主轴维保班报_20260320.md",
+      "device": "数控主轴单元",
+      "category": "维保日志"
+    },
+    {
+      "path": "repair_records/数控主轴单元/NC-004_主轴振动维修记录.md",
+      "label": "NC-004_主轴振动维修记录.md",
+      "device": "数控主轴单元",
+      "category": "维修记录"
+    },
+    {
+      "path": "case_cards/数控主轴单元/NC-004_主轴振动案例.md",
+      "label": "NC-004_主轴振动案例.md",
+      "device": "数控主轴单元",
+      "category": "案例卡"
+    }
+  ]
+}
