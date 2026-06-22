@@ -158,7 +158,7 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--workers", type=int, default=500, help="候选生成与 judge 的统一并发数。")
     parser.add_argument("--candidate-max-tokens", type=int, default=4096)
-    parser.add_argument("--judge-max-tokens", type=int, default=1200)
+    parser.add_argument("--judge-max-tokens", type=int, default=2048)
     parser.add_argument("--execute", action="store_true", help="实际调用可用候选接口与 Gemini judge。")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()

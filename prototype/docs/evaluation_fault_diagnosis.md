@@ -34,4 +34,4 @@ uv run python scripts/evaluate_fault_diagnosis.py `
 
 每次执行保存 `manifest.json`、`cases.jsonl`、`generations.jsonl`、`judgements.jsonl` 与 `summary.json`。`generations.jsonl` 的每一条候选请求都记录 `generation_elapsed_seconds`，`summary.json` 汇总各候选模型的生成耗时；Gemini judge 不记录耗时。禁止利用 test 的 judge 分数反复调 prompt、选 checkpoint 或改训练数据；这类决策应使用 development 集完成。
 
-默认以 500 并发请求候选模型和 judge；候选输出的 `max_tokens` 默认统一为 4096。可通过 `--workers` 或 `--candidate-max-tokens` 显式覆盖。
+默认以 500 并发请求候选模型和 judge；候选输出的 `max_tokens` 默认统一为 4096，judge 的 `max_tokens` 默认为 2048。可通过 `--workers`、`--candidate-max-tokens` 或 `--judge-max-tokens` 显式覆盖。
