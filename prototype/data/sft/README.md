@@ -26,7 +26,7 @@
 - `../../scripts/generate_runtime_sft.py`：v2 基线生成器，仅保留审计用途。
 - `../../scripts/generate_runtime_sft_refined.py`：精细场景生成器，支持 DMXAPI 并发和 `--retry-rejected` 原 scenario 重试机制。
 - `../../scripts/refresh_runtime_sft_prompts.py`：运行时 prompt 变更后的样本重渲染与定向重标队列生成器。
-- `../../scripts/evaluate_fault_diagnosis.py`：冻结 test 中辅助排查任务的 base / finetuned / DeepSeek-V4-Flash 三模型评测与 Gemini judge 链路。
+- `../../scripts/evaluate_fault_diagnosis.py`：冻结 test 中辅助排查任务的 base / finetuned / DeepSeek-V4-Flash / DeepSeek-V4-Pro 四模型评测与 Gemini judge 链路。
 - `../../scripts/generate_runtime_sft_v3.py`：按 `runtime_v3/scenario_matrix.json` 构造证据约束数据；仅作为历史审计保留。
 - `synthetic/`：第一代自由合成方案的审计留档，不得用于本轮训练。
 

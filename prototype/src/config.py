@@ -88,18 +88,6 @@ class AppConfig(BaseSettings):
         default="",
         validation_alias=AliasChoices("eval_finetuned_model", "EVAL_FINETUNED_MODEL"),
     )
-    eval_deepseek_v4_flash_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("eval_deepseek_v4_flash_api_key", "EVAL_DEEPSEEK_V4_FLASH_API_KEY"),
-    )
-    eval_deepseek_v4_flash_base_url: str = Field(
-        default="",
-        validation_alias=AliasChoices("eval_deepseek_v4_flash_base_url", "EVAL_DEEPSEEK_V4_FLASH_BASE_URL"),
-    )
-    eval_deepseek_v4_flash_model: str = Field(
-        default="deepseek-v4-flash",
-        validation_alias=AliasChoices("eval_deepseek_v4_flash_model", "EVAL_DEEPSEEK_V4_FLASH_MODEL"),
-    )
     model_name: str = Field(
         default="deepseek-chat",
         validation_alias=AliasChoices("model_name", "DEEPSEEK_MODEL"),
@@ -232,9 +220,7 @@ def get_env_help_text() -> str:
             "eval_finetuned_base_url=http://127.0.0.1:8001/v1（未部署时留空）",
             "eval_finetuned_model=微调模型服务的模型 ID",
             "eval_finetuned_api_key=本地兼容接口可填 EMPTY",
-            "eval_deepseek_v4_flash_model=deepseek-v4-flash",
-            "eval_deepseek_v4_flash_api_key=留空时复用 deepseek_api_key",
-            "eval_deepseek_v4_flash_base_url=留空时复用 deepseek_base_url",
+            "DeepSeek 评测候选统一复用 deepseek_api_key 与 deepseek_base_url",
             "qwen_api_key=你的Qwen/DashScope API Key",
             "qwen_base_url=https://dashscope.aliyuncs.com/compatible-mode/v1",
             "qwen_embedding_name=text-embedding-v4",
