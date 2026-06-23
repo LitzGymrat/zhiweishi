@@ -182,7 +182,7 @@ class RagPipeline:
         if self.metadata.index_exists() and not self.metadata.matches_index_config(self.index_config):
             self.rebuild_default_corpus()
         self.reasoner = None
-        if config.deepseek_api_key:
+        if config.generation_api_key:
             try:
                 self.reasoner = DeepSeekFaultReasoner(config)
             except Exception:

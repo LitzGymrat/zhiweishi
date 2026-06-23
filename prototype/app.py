@@ -266,7 +266,7 @@ with st.sidebar.expander("⚙️ 系统状态与配置", expanded=False):
     st.metric("覆盖设备数", corpus_summary["device_count"])
     st.metric("索引文本块数", pipeline.metadata.chunk_count())
     st.divider()
-    st.caption(f"**推理模型**：{config.deepseek_model}")
+    st.caption(f"**推理链路**：{config.generation_provider_label} / {config.generation_model}")
     st.caption(f"**向量模型**：{config.embedding_model}")
     st.caption(f"**存储路径**：{config.chroma_dir}")
     st.caption(f"**默认Top-K**：{config.top_k}")

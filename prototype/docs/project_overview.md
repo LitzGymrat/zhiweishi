@@ -14,18 +14,26 @@
 
 当前 Git 分支为 `codex/video-demo`，服务器初始化基准提交为 `960a2b5 Prepare 4090 deployment and case provenance`。
 
-当前应用仍使用外部服务：
+应用支持两条可切换链路：
 
 ```text
+在线：
 Streamlit UI
   -> RagPipeline
   -> Qwen/DashScope Embedding
   -> Chroma 向量检索 + BM25 关键词检索
   -> DeepSeek 结构化 JSON 生成
+
+本地：
+Streamlit UI
+  -> RagPipeline
+  -> Qwen3-Embedding-0.6B vLLM（OpenAI 兼容 embedding 接口）
+  -> Chroma 向量检索 + BM25 关键词检索
+  -> Qwen3.5-4B + LoRA vLLM（OpenAI 兼容 chat 接口）
   -> 排障卡 / 培训卡 / 案例复盘
 ```
 
-本地 `Qwen3.5-4B + BF16 LoRA + Qwen3-Embedding-0.6B` 是正在准备的下一阶段闭源部署路线。它当前尚未接入 `src/config.py` 和 `src/llm_client.py`，所以启动现有 Streamlit 服务不会自动改为调用本地 Qwen。
+通过 `.env` 的 `runtime_provider=online|local` 和 `embedding_provider=qwen|local` 切换。切换 embedding 后会自动重建索引，防止混用不同向量空间。Docker 中应用容器通过 `host.docker.internal` 调用宿主机上的两项 vLLM 服务。完整启动与切换说明见 `docs/deploy/local_model_runtime.md`。
 
 ## 已有功能
 
@@ -83,6 +91,8 @@ data/case_output/<设备>/case_YYYYMMDD_HHMMSS.json
 deepseek_api_key=...              # 当前结构化生成服务
 qwen_api_key=...                  # 当前 DashScope embedding 服务
 qwen_embedding_name=text-embedding-v4
+runtime_provider=online 或 local  # 生成链路切换
+embedding_provider=qwen 或 local  # 向量链路切换
 app_mode=full 或 poc1_readonly
 access_password=...               # 对外访问时必须设置
 demo_reset_enabled=true           # 仅演示场景显示重置按钮
@@ -103,7 +113,7 @@ demo_reset_enabled=true           # 仅演示场景显示重置按钮
 
 ## 关键边界
 
-1. 当前原型依赖外部 DeepSeek 与 DashScope；本地 Qwen 尚未接入应用。
+1. 在线链路依赖 DeepSeek 与 DashScope；本地链路依赖宿主机已启动的 LoRA vLLM（8001）和 Embedding vLLM（8002）。
 2. 当前 `pyproject.toml` 限定 Python `>=3.11,<3.12`，用于现有 Streamlit/Chroma 原型。
 3. AutoDL 的 Python 3.12 Qwen 镜像不能直接用于 `uv sync` 启动该原型；原型应使用 Docker 的 Python 3.11，或单独准备 Python 3.11 环境。
 4. 本地 Qwen 的训练、服务和 embedding 环境必须与 Streamlit 原型隔离。
