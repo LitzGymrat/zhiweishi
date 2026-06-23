@@ -14,5 +14,7 @@ services:
       STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
     ports:
       - "8506:8506"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data

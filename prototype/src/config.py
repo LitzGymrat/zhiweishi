@@ -20,6 +20,10 @@ def _normalize_embedding_provider(raw_value: str) -> str:
     value = raw_value.strip().lower()
     if value in {"dashscope", "qwen"}:
         return "qwen"
+    if value in {"local", "vllm", "local_vllm"}:
+        return "local"
+    if value in {"hash", "local_hash"}:
+        return "hash"
     if value == "":
         return "qwen"
     return value
@@ -30,6 +34,13 @@ def _normalize_app_mode(raw_value: str) -> str:
     if value in {"poc1", "poc1_readonly", "readonly", "read_only"}:
         return "poc1_readonly"
     return "full"
+
+
+def _normalize_runtime_provider(raw_value: str) -> str:
+    value = str(raw_value or "online").strip().lower()
+    if value in {"local", "on_premise", "on-premise"}:
+        return "local"
+    return "online"
 
 
 def _parse_bool(raw_value: str) -> bool:
@@ -120,13 +131,37 @@ class AppConfig(BaseSettings):
         default="deepseek-chat",
         validation_alias=AliasChoices("model_name", "DEEPSEEK_MODEL"),
     )
+    runtime_provider: str = Field(
+        default="online",
+        validation_alias=AliasChoices("runtime_provider", "ZHIWEISHI_RUNTIME_PROVIDER"),
+    )
+    local_llm_base_url: str = Field(
+        default="http://127.0.0.1:8001/v1",
+        validation_alias=AliasChoices("local_llm_base_url", "LOCAL_LLM_BASE_URL"),
+    )
+    local_llm_api_key: str = Field(
+        default="EMPTY",
+        validation_alias=AliasChoices("local_llm_api_key", "LOCAL_LLM_API_KEY"),
+    )
+    local_llm_model: str = Field(
+        default="finetuned",
+        validation_alias=AliasChoices("local_llm_model", "LOCAL_LLM_MODEL"),
+    )
     embedding_provider: str = Field(
         default="qwen",
         validation_alias=AliasChoices("embedding_provider", "ZHIWEISHI_EMBEDDING_PROVIDER"),
     )
     local_embedding_name: str = Field(
-        default="all-MiniLM-L6-v2",
+        default="qwen3-embedding-0.6b",
         validation_alias=AliasChoices("local_embedding_name", "LOCAL_EMBEDDING_NAME"),
+    )
+    local_embedding_base_url: str = Field(
+        default="http://127.0.0.1:8002/v1",
+        validation_alias=AliasChoices("local_embedding_base_url", "LOCAL_EMBEDDING_BASE_URL"),
+    )
+    local_embedding_api_key: str = Field(
+        default="EMPTY",
+        validation_alias=AliasChoices("local_embedding_api_key", "LOCAL_EMBEDDING_API_KEY"),
     )
     qwen_api_key: str = Field(
         default="",
@@ -191,6 +226,11 @@ class AppConfig(BaseSettings):
     def normalize_app_mode(cls, value: str) -> str:
         return _normalize_app_mode(str(value or "full"))
 
+    @field_validator("runtime_provider", mode="before")
+    @classmethod
+    def normalize_runtime_provider(cls, value: str) -> str:
+        return _normalize_runtime_provider(str(value or "online"))
+
     @field_validator("demo_reset_enabled", mode="before")
     @classmethod
     def normalize_demo_reset_enabled(cls, value: str | bool) -> bool:
@@ -207,9 +247,27 @@ class AppConfig(BaseSettings):
         return self.model_name
 
     @property
+    def generation_base_url(self) -> str:
+        return self.local_llm_base_url if self.runtime_provider == "local" else self.deepseek_base_url
+
+    @property
+    def generation_api_key(self) -> str:
+        return self.local_llm_api_key if self.runtime_provider == "local" else self.deepseek_api_key
+
+    @property
+    def generation_model(self) -> str:
+        return self.local_llm_model if self.runtime_provider == "local" else self.deepseek_model
+
+    @property
+    def generation_provider_label(self) -> str:
+        return "本地 LoRA 模型" if self.runtime_provider == "local" else "DeepSeek 在线模型"
+
+    @property
     def embedding_model(self) -> str:
         if self.embedding_provider == "local":
             return self.local_embedding_name
+        if self.embedding_provider == "hash":
+            return "local-hash-256"
         return self.qwen_embedding_name
 
     @property
@@ -247,6 +305,10 @@ def get_env_help_text() -> str:
             "deepseek_api_key=你的DeepSeek API Key",
             "deepseek_base_url=https://api.deepseek.com",
             "model_name=deepseek-chat",
+            "runtime_provider=online 或 local",
+            "local_llm_base_url=http://127.0.0.1:8001/v1（Docker 中改为 http://host.docker.internal:8001/v1）",
+            "local_llm_model=finetuned",
+            "local_llm_api_key=EMPTY",
             "dmx_api_key=你的DMXAPI Key（仅用于 SFT 教师模型）",
             "dmx_base_url=https://www.dmxapi.cn/v1",
             "dmx_model=gemini-3-flash-preview",
@@ -267,8 +329,10 @@ def get_env_help_text() -> str:
             "qwen_api_key=你的Qwen/DashScope API Key",
             "qwen_base_url=https://dashscope.aliyuncs.com/compatible-mode/v1",
             "qwen_embedding_name=text-embedding-v4",
-            "embedding_provider=qwen 或 local",
-            "local_embedding_name=all-MiniLM-L6-v2",
+            "embedding_provider=qwen、local 或 hash（仅开发回退）",
+            "local_embedding_base_url=http://127.0.0.1:8002/v1（Docker 中改为 http://host.docker.internal:8002/v1）",
+            "local_embedding_name=qwen3-embedding-0.6b",
+            "local_embedding_api_key=EMPTY",
             "Chroma_persist_dir=./data/chroma_db",
             "bm25_persist_dir=./data/bm25_index.json",
             "chunk_size=500",

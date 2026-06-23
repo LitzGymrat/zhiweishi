@@ -217,10 +217,14 @@ def _normalize_list(value: Any, default: list[str], limit: int) -> list[str]:
 
 class DeepSeekFaultReasoner:
     def __init__(self, config: AppConfig) -> None:
-        if not config.deepseek_api_key:
-            raise ValueError("deepseek_api_key 未配置，无法调用 DeepSeek。")
-        self.client = OpenAI(api_key=config.deepseek_api_key, base_url=config.deepseek_base_url)
-        self.model = config.deepseek_model
+        if not config.generation_api_key:
+            raise ValueError(f"{config.generation_provider_label} 的 API Key 未配置，无法调用生成模型。")
+        if not config.generation_base_url:
+            raise ValueError(f"{config.generation_provider_label} 的 base_url 未配置，无法调用生成模型。")
+        if not config.generation_model:
+            raise ValueError(f"{config.generation_provider_label} 的模型 ID 未配置，无法调用生成模型。")
+        self.client = OpenAI(api_key=config.generation_api_key, base_url=config.generation_base_url)
+        self.model = config.generation_model
 
     def _format_context(self, context_items: list[dict]) -> str:
         return format_runtime_context(context_items)
