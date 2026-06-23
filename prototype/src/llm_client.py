@@ -115,17 +115,25 @@ def format_runtime_context(context_items: list[dict]) -> str:
             "行业常识必须显式标注来源，不能作为当前根因结论。"
         )
 
-    return "\n\n".join(
-        [
+    rendered_items: list[str] = []
+    for index, item in enumerate(context_items, start=1):
+        content = str(item.get("content", ""))
+        image_evidence_boundary = ""
+        if "图片派生证据（仅作可见事实，须人工复核）" in content:
+            image_evidence_boundary = (
+                "图片派生证据边界：其中 OCR、图像说明和可见观察只代表图片可见内容，"
+                "不能据此确认根因或故障件；图片模糊、遮挡或未抽取时必须保留不确定性。\n"
+            )
+        rendered_items.append(
             (
                 f"[片段{index}] 来源：{item.get('source_label', '未知来源')}"
                 f" | 类别：{item.get('doc_category', '未分类文档')}"
                 f" | 设备：{item.get('device_name', '未分类设备')}\n"
-                f"内容：{item.get('content', '')}"
+                f"{image_evidence_boundary}"
+                f"内容：{content}"
             )
-            for index, item in enumerate(context_items, start=1)
-        ]
-    )
+        )
+    return "\n\n".join(rendered_items)
 
 
 def build_runtime_system_prompt(task_name: str) -> str:

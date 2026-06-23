@@ -14,6 +14,7 @@ from src.demo_data import build_training_questions, find_case
 from src.document_store import IngestResult, MetadataStore
 from src.embeddings import build_embedding_client
 from src.hybrid_retriever import SimpleBM25, dump_sparse_records, load_sparse_records
+from src.image_evidence import extract_image_references_from_text
 from src.llm_client import DeepSeekFaultReasoner
 from src.loaders import load_document
 
@@ -136,6 +137,23 @@ def _extract_writeback_case_references(retrieved_chunks: list[dict]) -> list[dic
         )
         seen_sources.add(source_label)
     return references[:3]
+
+
+def _extract_image_evidence_references(retrieved_chunks: list[dict]) -> list[dict[str, str]]:
+    references: list[dict[str, str]] = []
+    seen_storage_refs: set[str] = set()
+    for chunk in retrieved_chunks:
+        for reference in extract_image_references_from_text(
+            str(chunk.get("content", "")), str(chunk.get("source_label", ""))
+        ):
+            storage_ref = reference["storage_ref"]
+            if storage_ref in seen_storage_refs:
+                continue
+            seen_storage_refs.add(storage_ref)
+            references.append(reference)
+            if len(references) >= 4:
+                return references
+    return references
 
 
 def _normalize_device_name(device_name: str) -> str:
@@ -458,6 +476,7 @@ class RagPipeline:
     def answer_fault_question(self, device_name: str, symptom: str, top_k: int | None = None) -> dict:
         retrieved_chunks = self._resolve_retrieved_chunks(device_name, symptom, top_k=top_k)
         writeback_case_references = _extract_writeback_case_references(retrieved_chunks)
+        image_evidence_references = _extract_image_evidence_references(retrieved_chunks)
         if self.reasoner and retrieved_chunks:
             try:
                 result = self.reasoner.build_fault_card(device_name, symptom, retrieved_chunks)
@@ -469,11 +488,13 @@ class RagPipeline:
                 )
                 result["retrieved_chunks"] = retrieved_chunks
                 result["writeback_case_references"] = writeback_case_references
+                result["image_evidence_references"] = image_evidence_references
                 return result
             except Exception:
                 pass
         result = self._build_fallback_result(device_name, symptom, retrieved_chunks)
         result["writeback_case_references"] = writeback_case_references
+        result["image_evidence_references"] = image_evidence_references
         return result
 
     def _build_training_fallback(self, fault_result: dict, retrieved_chunks: list[dict]) -> dict:

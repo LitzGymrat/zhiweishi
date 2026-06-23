@@ -64,6 +64,34 @@ class AppConfig(BaseSettings):
         default="gemini-3-flash-preview",
         validation_alias=AliasChoices("dmx_model", "DMX_MODEL"),
     )
+    vision_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("vision_api_key", "VISION_API_KEY"),
+    )
+    vision_base_url: str = Field(
+        default="",
+        validation_alias=AliasChoices("vision_base_url", "VISION_BASE_URL"),
+    )
+    vision_model: str = Field(
+        default="",
+        validation_alias=AliasChoices("vision_model", "VISION_MODEL"),
+    )
+    vision_max_tokens: int = Field(
+        default=1024,
+        validation_alias=AliasChoices("vision_max_tokens", "VISION_MAX_TOKENS"),
+    )
+    vision_timeout_seconds: float = Field(
+        default=60.0,
+        validation_alias=AliasChoices("vision_timeout_seconds", "VISION_TIMEOUT_SECONDS"),
+    )
+    image_max_upload_mb: int = Field(
+        default=10,
+        validation_alias=AliasChoices("image_max_upload_mb", "IMAGE_MAX_UPLOAD_MB"),
+    )
+    image_max_pixels: int = Field(
+        default=20_000_000,
+        validation_alias=AliasChoices("image_max_pixels", "IMAGE_MAX_PIXELS"),
+    )
     eval_base_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("eval_base_api_key", "EVAL_BASE_API_KEY"),
@@ -204,6 +232,14 @@ class AppConfig(BaseSettings):
     def has_access_password(self) -> bool:
         return bool(self.access_password.strip())
 
+    @property
+    def has_vision_endpoint(self) -> bool:
+        return bool(self.vision_base_url.strip() and self.vision_model.strip())
+
+    @property
+    def image_max_upload_bytes(self) -> int:
+        return max(self.image_max_upload_mb, 1) * 1024 * 1024
+
 
 def get_env_help_text() -> str:
     return "\n".join(
@@ -214,6 +250,13 @@ def get_env_help_text() -> str:
             "dmx_api_key=你的DMXAPI Key（仅用于 SFT 教师模型）",
             "dmx_base_url=https://www.dmxapi.cn/v1",
             "dmx_model=gemini-3-flash-preview",
+            "vision_api_key=可选；视觉模型接口密钥（本地接口可填 EMPTY）",
+            "vision_base_url=可选；OpenAI-compatible 视觉接口地址",
+            "vision_model=可选；视觉模型 ID。留空时图片仅归档、不发送到外部接口",
+            "vision_max_tokens=1024",
+            "vision_timeout_seconds=60",
+            "image_max_upload_mb=10",
+            "image_max_pixels=20000000",
             "eval_base_base_url=http://127.0.0.1:8000/v1（未部署时留空）",
             "eval_base_model=基础模型服务的模型 ID",
             "eval_base_api_key=本地兼容接口可填 EMPTY",
