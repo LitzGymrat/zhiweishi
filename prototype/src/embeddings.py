@@ -39,6 +39,30 @@ class QwenEmbeddingClient:
         return embeddings
 
 
+class LocalOpenAIEmbeddingClient:
+    """Embedding client for a locally served OpenAI-compatible embedding model."""
+
+    def __init__(self, config: AppConfig) -> None:
+        if not config.local_embedding_base_url.strip():
+            raise ValueError("local_embedding_base_url 未配置，无法调用本地 embedding 服务。")
+        if not config.local_embedding_name.strip():
+            raise ValueError("local_embedding_name 未配置，无法调用本地 embedding 服务。")
+        self.client = OpenAI(
+            api_key=config.local_embedding_api_key or "EMPTY",
+            base_url=config.local_embedding_base_url,
+        )
+        self.model = config.local_embedding_name
+        self.batch_size = 10
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), self.batch_size):
+            batch = texts[start : start + self.batch_size]
+            response = self.client.embeddings.create(model=self.model, input=batch)
+            embeddings.extend(item.embedding for item in response.data)
+        return embeddings
+
+
 class LocalHashEmbeddingClient:
     def __init__(self, dims: int = 256) -> None:
         self.dims = dims
@@ -59,8 +83,9 @@ class LocalHashEmbeddingClient:
 
 def build_embedding_client(config: AppConfig) -> EmbeddingClient:
     if config.embedding_provider == "qwen":
-        try:
-            return QwenEmbeddingClient(config)
-        except Exception:
-            return LocalHashEmbeddingClient()
-    return LocalHashEmbeddingClient()
+        return QwenEmbeddingClient(config)
+    if config.embedding_provider == "local":
+        return LocalOpenAIEmbeddingClient(config)
+    if config.embedding_provider == "hash":
+        return LocalHashEmbeddingClient()
+    raise ValueError(f"不支持的 embedding_provider：{config.embedding_provider}")

@@ -11,6 +11,7 @@ from src.config import AppConfig
 
 FAULT_SCHEMA_EXAMPLE = {
     "summary": "一句话结论",
+    "matched_writeback_case_note": "完整回写命中时引用案例编号、处理人和回写时间；不完整回写说明缺失字段；未命中则为空字符串",
     "evidence_observations": ["证据观察1", "证据观察2"],
     "possible_causes": ["原因1", "原因2"],
     "troubleshooting_steps": ["步骤1", "步骤2"],
@@ -63,6 +64,7 @@ TASK_PROMPTS: dict[str, PromptTaskSpec] = {
         style_rules=(
             "用现场维保口吻，短句、直接、可执行。",
             "先给结论，再给依据，不写空泛分析。",
+            "命中人工确认的回写案例时，必须在回写案例说明中引用案例编号、处理人和回写时间；未命中时保持为空。",
             "避免宣传语、聊天语气和无依据推测。",
         ),
         output_schema=FAULT_SCHEMA_EXAMPLE,
@@ -104,6 +106,81 @@ TASK_PROMPTS: dict[str, PromptTaskSpec] = {
 }
 
 
+def format_runtime_context(context_items: list[dict]) -> str:
+    """Render retrieved chunks exactly as they are presented to the production model."""
+    if not context_items:
+        return (
+            "无检索片段。未命中内部 SOP、维护记录或历史案例。"
+            "请先说明当前无内部检索证据，再基于行业常识给出低风险通用排查建议；"
+            "行业常识必须显式标注来源，不能作为当前根因结论。"
+        )
+
+    rendered_items: list[str] = []
+    for index, item in enumerate(context_items, start=1):
+        content = str(item.get("content", ""))
+        image_evidence_boundary = ""
+        if "图片派生证据（仅作可见事实，须人工复核）" in content:
+            image_evidence_boundary = (
+                "图片派生证据边界：其中 OCR、图像说明和可见观察只代表图片可见内容，"
+                "不能据此确认根因或故障件；图片模糊、遮挡或未抽取时必须保留不确定性。\n"
+            )
+        rendered_items.append(
+            (
+                f"[片段{index}] 来源：{item.get('source_label', '未知来源')}"
+                f" | 类别：{item.get('doc_category', '未分类文档')}"
+                f" | 设备：{item.get('device_name', '未分类设备')}\n"
+                f"{image_evidence_boundary}"
+                f"内容：{content}"
+            )
+        )
+    return "\n\n".join(rendered_items)
+
+
+def build_runtime_system_prompt(task_name: str) -> str:
+    """Return the canonical system prompt used both online and by SFT builders."""
+    spec = TASK_PROMPTS[task_name]
+    framework_text = "\n".join(
+        f"{index}. {step}" for index, step in enumerate(spec.reasoning_framework, start=1)
+    )
+    style_text = "\n".join(f"- {rule}" for rule in spec.style_rules)
+    writeback_case_rule = ""
+    if task_name == "fault_diagnosis":
+        writeback_case_rule = (
+            "6. 回写案例处理：仅当检索片段包含“来源：前台案例回写（人工确认后归档）”，"
+            "且同时给出案例编号、处理人、回写时间、实际处理步骤和最终结论时，"
+            "才是完整命中；matched_writeback_case_note 必须准确引用案例编号、处理人和回写时间，"
+            "并说明它仍需由本次现场复核。若包含该来源标记但缺少任一必要字段，"
+            "只能标为“疑似/不完整回写参考”，指出缺失字段，不得据此确认本次根因。"
+            "没有该来源标记时该字段返回空字符串，不得编造。\n"
+        )
+    return (
+        "你是工业设备维保场景的知识增强助手。"
+        "你必须先做基于证据的半形式化推理，再输出结构化结果。\n"
+        "硬性约束：\n"
+        "1. 默认应优先使用输入字段和检索片段中的事实。若检索片段为空，或检索结果明显不可用，"
+        "应先明确说明未命中内部 SOP、维护记录或历史案例；随后可以基于行业常识给出低风险通用排查建议，"
+        "但必须显式标注这些建议来自行业常识/通用经验，不等同于知识库证据，也不能作为当前根因结论。\n"
+        "2. 先抽取证据，再形成判断，再给出动作建议，不得跳步。\n"
+        "3. 对证据不足部分必须写入不确定性说明，不得脑补。\n"
+        "4. 禁止输出 markdown、代码块、解释文本或 schema 之外的字段。\n"
+        "5. 输出必须是严格 JSON，字段名和层级必须与要求完全一致。\n"
+        f"{writeback_case_rule}\n"
+        f"任务场景：{spec.label}\n"
+        f"半形式化推理框架：\n{framework_text}\n\n"
+        f"回复风格要求：\n{style_text}"
+    )
+
+
+def build_runtime_user_message(task_name: str, payload: dict[str, Any], context_items: list[dict]) -> str:
+    """Return the canonical user message used by production inference."""
+    spec = TASK_PROMPTS[task_name]
+    return (
+        f"输入字段：\n{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
+        f"检索片段：\n{format_runtime_context(context_items)}\n\n"
+        f"输出 JSON，字段必须为：{json.dumps(spec.output_schema, ensure_ascii=False)}"
+    )
+
+
 def extract_json_object(text: str) -> dict:
     text = text.strip()
     if text.startswith("{") and text.endswith("}"):
@@ -140,46 +217,20 @@ def _normalize_list(value: Any, default: list[str], limit: int) -> list[str]:
 
 class DeepSeekFaultReasoner:
     def __init__(self, config: AppConfig) -> None:
-        if not config.deepseek_api_key:
-            raise ValueError("deepseek_api_key 未配置，无法调用 DeepSeek。")
-        self.client = OpenAI(api_key=config.deepseek_api_key, base_url=config.deepseek_base_url)
-        self.model = config.deepseek_model
+        if not config.generation_api_key:
+            raise ValueError(f"{config.generation_provider_label} 的 API Key 未配置，无法调用生成模型。")
+        if not config.generation_base_url:
+            raise ValueError(f"{config.generation_provider_label} 的 base_url 未配置，无法调用生成模型。")
+        if not config.generation_model:
+            raise ValueError(f"{config.generation_provider_label} 的模型 ID 未配置，无法调用生成模型。")
+        self.client = OpenAI(api_key=config.generation_api_key, base_url=config.generation_base_url)
+        self.model = config.generation_model
 
     def _format_context(self, context_items: list[dict]) -> str:
-        if not context_items:
-            return "无检索片段。只能使用输入字段中的事实，必须保守作答。"
-
-        return "\n\n".join(
-            [
-                (
-                    f"[片段{index}] 来源：{item.get('source_label', '未知来源')}"
-                    f" | 类别：{item.get('doc_category', '未分类文档')}"
-                    f" | 设备：{item.get('device_name', '未分类设备')}\n"
-                    f"内容：{item.get('content', '')}"
-                )
-                for index, item in enumerate(context_items, start=1)
-            ]
-        )
+        return format_runtime_context(context_items)
 
     def _build_system_prompt(self, task_name: str) -> str:
-        spec = TASK_PROMPTS[task_name]
-        framework_text = "\n".join(
-            f"{index}. {step}" for index, step in enumerate(spec.reasoning_framework, start=1)
-        )
-        style_text = "\n".join(f"- {rule}" for rule in spec.style_rules)
-        return (
-            "你是工业设备维保场景的知识增强助手。"
-            "你必须先做基于证据的半形式化推理，再输出结构化结果。\n"
-            "硬性约束：\n"
-            "1. 只允许使用输入字段和检索片段中的事实。\n"
-            "2. 先抽取证据，再形成判断，再给出动作建议，不得跳步。\n"
-            "3. 对证据不足部分必须写入不确定性说明，不得脑补。\n"
-            "4. 禁止输出 markdown、代码块、解释文本或 schema 之外的字段。\n"
-            "5. 输出必须是严格 JSON，字段名和层级必须与要求完全一致。\n\n"
-            f"任务场景：{spec.label}\n"
-            f"半形式化推理框架：\n{framework_text}\n\n"
-            f"回复风格要求：\n{style_text}"
-        )
+        return build_runtime_system_prompt(task_name)
 
     def _normalize_fault_result(self, result: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -187,6 +238,7 @@ class DeepSeekFaultReasoner:
                 result.get("summary"),
                 "当前证据不足，建议先核对基础状态和关键连接，再继续排查。",
             ),
+            "matched_writeback_case_note": _normalize_text(result.get("matched_writeback_case_note"), ""),
             "evidence_observations": _normalize_list(
                 result.get("evidence_observations"),
                 ["检索片段已返回与当前故障相关的维保依据。"],
@@ -301,11 +353,7 @@ class DeepSeekFaultReasoner:
                 {"role": "system", "content": self._build_system_prompt(task_name)},
                 {
                     "role": "user",
-                    "content": (
-                        f"输入字段：\n{json.dumps(payload, ensure_ascii=False, indent=2)}\n\n"
-                        f"检索片段：\n{self._format_context(context_items)}\n\n"
-                        f"输出 JSON，字段必须为：{json.dumps(spec.output_schema, ensure_ascii=False)}"
-                    ),
+                    "content": build_runtime_user_message(task_name, payload, context_items),
                 },
             ],
         )

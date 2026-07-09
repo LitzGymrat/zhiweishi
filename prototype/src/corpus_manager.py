@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from src.image_evidence import (
+    CASE_IMAGE_DIR,
+    ImageEvidenceService,
+    PreparedImageUpload,
+    persist_case_image_evidence,
+    render_image_evidence_markdown,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -257,12 +266,12 @@ def render_case_writeback_markdown(payload: dict[str, Any]) -> str:
     experience_summary = str(payload.get("experience_summary", "")).strip()
 
     lines = [
-        f"案例编号：AUTO-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
+        f"案例编号：{payload.get('case_id', '未记录')}",
         f"设备：{payload.get('device', DEFAULT_DEVICE_NAME)}",
         "文档类别：案例卡",
         REVIEWED_WRITEBACK_SOURCE,
         f"处理人：{payload.get('operator', '未填写') or '未填写'}",
-        f"回写时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"回写时间：{payload.get('saved_at', datetime.now().isoformat(timespec='seconds'))}",
         "",
         "故障现象：",
         str(payload.get("symptom", "未填写")),
@@ -302,12 +311,20 @@ def render_case_writeback_markdown(payload: dict[str, Any]) -> str:
     else:
         lines.append("- 无")
 
+    lines.extend(render_image_evidence_markdown(payload.get("image_evidence", [])))
+
     return "\n".join(lines).strip() + "\n"
 
 
-def save_case_writeback(payload: dict[str, Any]) -> dict[str, Path]:
+def save_case_writeback(
+    payload: dict[str, Any],
+    *,
+    image_uploads: list[PreparedImageUpload] | None = None,
+    image_evidence_service: ImageEvidenceService | None = None,
+) -> dict[str, Any]:
     prepared_payload = prepare_case_writeback_payload(payload)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    saved_at = datetime.now()
+    timestamp = saved_at.strftime("%Y%m%d_%H%M%S")
     device_name = str(prepared_payload.get("device", DEFAULT_DEVICE_NAME) or DEFAULT_DEVICE_NAME)
     knowledge_dir = resolve_document_dir("case_cards", device_name)
     audit_dir = CASE_OUTPUT_DIR / normalize_path_component(device_name)
@@ -316,11 +333,23 @@ def save_case_writeback(payload: dict[str, Any]) -> dict[str, Path]:
     base_name = f"case_{timestamp}"
     audit_json_path = audit_dir / f"{base_name}.json"
     knowledge_doc_path = knowledge_dir / f"{base_name}.md"
+    image_evidence = (
+        persist_case_image_evidence(
+            case_basename=base_name,
+            device_name=device_name,
+            uploads=image_uploads,
+            service=image_evidence_service,
+        )
+        if image_uploads and image_evidence_service
+        else []
+    )
 
     payload_with_timestamp = {
         **prepared_payload,
-        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "case_id": f"AUTO-{saved_at.strftime('%Y%m%d-%H%M%S')}",
+        "saved_at": saved_at.isoformat(timespec="seconds"),
         "knowledge_doc_path": str(knowledge_doc_path),
+        "image_evidence": image_evidence,
     }
     audit_json_path.write_text(
         json.dumps(payload_with_timestamp, ensure_ascii=False, indent=2),
@@ -333,4 +362,38 @@ def save_case_writeback(payload: dict[str, Any]) -> dict[str, Path]:
     return {
         "audit_json_path": audit_json_path,
         "knowledge_doc_path": knowledge_doc_path,
+        "image_evidence": image_evidence,
+        "case_payload": payload_with_timestamp,
+    }
+
+
+def reset_demo_writebacks() -> dict[str, int]:
+    deleted_knowledge_docs = 0
+    deleted_audit_files = 0
+    deleted_images = 0
+
+    case_cards_dir = DOCUMENTS_DIR / "case_cards"
+    if case_cards_dir.exists():
+        for file_path in case_cards_dir.rglob("case_*.md"):
+            if not AUTO_WRITEBACK_FILE_PATTERN.match(file_path.name):
+                continue
+            file_path.unlink()
+            deleted_knowledge_docs += 1
+
+    if CASE_OUTPUT_DIR.exists():
+        for file_path in CASE_OUTPUT_DIR.rglob("case_*.json"):
+            file_path.unlink()
+            deleted_audit_files += 1
+
+    if CASE_IMAGE_DIR.exists():
+        for case_directory in CASE_IMAGE_DIR.rglob("case_*"):
+            if not case_directory.is_dir():
+                continue
+            deleted_images += sum(1 for item in case_directory.rglob("*") if item.is_file())
+            shutil.rmtree(case_directory)
+
+    return {
+        "deleted_knowledge_docs": deleted_knowledge_docs,
+        "deleted_audit_files": deleted_audit_files,
+        "deleted_images": deleted_images,
     }

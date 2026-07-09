@@ -1,0 +1,3 @@
+# Evaluation runs contain model outputs and judge reports; keep them local by default.
+*
+!.gitignore

@@ -15,8 +15,15 @@ from src.corpus_manager import (
     build_corpus_summary,
     collect_corpus_documents,
     prepare_case_writeback_payload,
+    reset_demo_writebacks,
     resolve_document_dir,
     save_case_writeback,
+)
+from src.image_evidence import (
+    ImageEvidenceService,
+    ImageEvidenceValidationError,
+    prepare_image_upload,
+    resolve_stored_image,
 )
 from src.rag_pipeline import RagPipeline
 
@@ -38,6 +45,21 @@ def ingest_default_documents(pipeline: RagPipeline) -> None:
 def render_fault_result(result: dict) -> None:
     st.subheader("📋 诊断摘要", divider="blue")
     st.info(result.get("summary", "当前暂无结构化摘要。"))
+
+    writeback_case_references = result.get("writeback_case_references", [])
+    if writeback_case_references:
+        with st.container(border=True):
+            st.markdown("#### 📝 已命中回写案例")
+            for reference in writeback_case_references:
+                case_id_col, operator_col, written_at_col = st.columns(3)
+                case_id_col.metric("案例编号", reference.get("case_id", "未记录"))
+                operator_col.metric("处理人", reference.get("operator", "未填写"))
+                written_at_col.metric("回写时间", reference.get("written_at", "未记录"))
+                st.caption(f"来源：{reference.get('source_label', '回写案例')} | 人工确认后归档")
+
+            case_note = str(result.get("matched_writeback_case_note", "")).strip()
+            if case_note:
+                st.success(case_note)
 
     col1, col2 = st.columns(2)
     with col1:
@@ -77,6 +99,19 @@ def render_fault_result(result: dict) -> None:
     with st.expander("📚 依据文档", expanded=False):
         for item in result.get("evidence_sources", []):
             st.markdown(f"- `{item}`")
+
+    image_references = result.get("image_evidence_references", [])
+    if image_references:
+        with st.expander("🖼️ 检索命中图片证据", expanded=False):
+            st.caption("图片派生内容只描述可见事实，仍需结合原图和现场人工复核。")
+            image_columns = st.columns(min(len(image_references), 2))
+            for index, reference in enumerate(image_references):
+                with image_columns[index % len(image_columns)]:
+                    image_path = resolve_stored_image(str(reference.get("storage_ref", "")))
+                    if image_path:
+                        st.image(str(image_path), caption=f"{reference.get('image_id', '图片证据')} | {reference.get('source_label', '')}")
+                    else:
+                        st.warning(f"{reference.get('image_id', '图片证据')} 的原图文件不可用。")
 
 
 def render_training_result(result: dict) -> None:
@@ -201,13 +236,37 @@ if config.is_poc1_readonly:
     st.sidebar.info("只保留 PoC1 相关的故障排查体验页面，已隐藏案例回写和数据导入，也不会自动建库写盘。")
 else:
     st.sidebar.info("聚焦老旧设备维保场景，展示排障、培训和案例沉淀的基本闭环。")
+    if config.demo_reset_enabled:
+        with st.sidebar.expander("🎬 演示拍摄控制", expanded=True):
+            st.caption("拍摄前点击一次，可恢复到“回写前”的干净状态。")
+            if st.session_state.get("demo_reset_message"):
+                st.success(st.session_state.pop("demo_reset_message"))
+            if st.button("重置回写数据并重建知识库", type="primary", use_container_width=True):
+                with st.spinner("正在清理演示回写并重建知识库..."):
+                    reset_result = reset_demo_writebacks()
+                    ingest_result = pipeline.rebuild_default_corpus(DOCUMENTS_DIR)
+                for key in (
+                    "last_fault_result",
+                    "last_training_result",
+                    "last_training_signature",
+                    "last_case_review",
+                ):
+                    st.session_state.pop(key, None)
+                st.session_state["demo_reset_message"] = (
+                    "已恢复演示状态："
+                    f"删除 {reset_result['deleted_knowledge_docs']} 份回写案例、"
+                    f"{reset_result['deleted_audit_files']} 份审计记录、"
+                    f"{reset_result['deleted_images']} 张归档图片；"
+                    f"当前知识库 {ingest_result.document_count} 份文档、{ingest_result.chunk_count} 个文本块。"
+                )
+                st.rerun()
 
 with st.sidebar.expander("⚙️ 系统状态与配置", expanded=False):
     st.metric("知识库文档数", corpus_summary["total_documents"])
     st.metric("覆盖设备数", corpus_summary["device_count"])
     st.metric("索引文本块数", pipeline.metadata.chunk_count())
     st.divider()
-    st.caption(f"**推理模型**：{config.deepseek_model}")
+    st.caption(f"**推理链路**：{config.generation_provider_label} / {config.generation_model}")
     st.caption(f"**向量模型**：{config.embedding_model}")
     st.caption(f"**存储路径**：{config.chroma_dir}")
     st.caption(f"**默认Top-K**：{config.top_k}")
@@ -390,6 +449,16 @@ if "writeback" in tab_map:
             final_result = st.text_area("🏁 最终处理结论", height=80)
             experience_summary = st.text_area("💡 经验总结", height=80)
             operator_name = st.text_input("👨‍🔧 责任操作人", value="李工")
+            case_images = st.file_uploader(
+                "🖼️ 现场图片证据（可选，JPEG/PNG）",
+                type=["jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                help="原图会与案例一起归档；若配置视觉模型，将抽取 OCR、图像说明和可见事实。",
+            )
+            if config.has_vision_endpoint:
+                st.caption(f"图片将发送至已配置的视觉模型 `{config.vision_model}` 生成派生证据；结果仍须人工复核。")
+            else:
+                st.caption("当前未配置视觉模型：图片会安全归档，但不会自动生成 OCR 或图像说明。")
             submit = st.form_submit_button("📤 保存案例并更新知识库", use_container_width=True)
 
         if submit:
@@ -406,22 +475,40 @@ if "writeback" in tab_map:
             }
             try:
                 prepared_payload = prepare_case_writeback_payload(payload)
+                prepared_images = [
+                    prepare_image_upload(
+                        uploaded.name,
+                        uploaded.getvalue(),
+                        max_bytes=config.image_max_upload_bytes,
+                        max_pixels=config.image_max_pixels,
+                    )
+                    for uploaded in case_images or []
+                ]
             except CaseWritebackValidationError as error:
                 error_lines = "\n".join([f"- {item}" for item in error.errors])
                 st.error(f"请先补完整案例内容后再入库：\n{error_lines}")
+            except ImageEvidenceValidationError as error:
+                st.error(f"图片证据未通过归档校验：{error}")
             else:
                 with st.spinner("正在保存案例并更新知识库..."):
-                    saved_paths = save_case_writeback(prepared_payload)
+                    saved_paths = save_case_writeback(
+                        prepared_payload,
+                        image_uploads=prepared_images,
+                        image_evidence_service=ImageEvidenceService(config),
+                    )
                     pipeline.rebuild_default_corpus(DOCUMENTS_DIR)
                     case_review = pipeline.review_case_writeback(
-                        prepared_payload,
+                        saved_paths["case_payload"],
                         retrieved_chunks=default_result.get("retrieved_chunks"),
                     )
                 st.session_state["last_case_review"] = case_review
                 st.success(f"🎉 已保存案例，并归档到 `{saved_paths['knowledge_doc_path']}`。")
                 with st.expander("🛠️ 查看保存的结构化数据", expanded=False):
-                    st.json(prepared_payload)
+                    st.json(saved_paths["case_payload"])
                     st.write(f"`{saved_paths['audit_json_path']}`")
+
+                if saved_paths["image_evidence"]:
+                    st.caption(f"已归档 {len(saved_paths['image_evidence'])} 张图片证据；派生内容已写入案例卡并参与后续检索。")
 
                 render_case_review(case_review)
         elif st.session_state.get("last_case_review"):
